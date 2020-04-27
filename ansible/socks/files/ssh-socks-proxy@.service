@@ -1,0 +1,16 @@
+[Unit]
+Description=Setup a ssh socks proxy to %I
+After=network.target
+
+[Service]
+Environment="LOCAL_ADDR=localhost"
+EnvironmentFile=/etc/default/ssh-socks-proxy@%i
+ExecStart=/usr/bin/ssh -NT -o ServerAliveInterval=60 -D ${LOCAL_PORT} -l ${USER} -oStrictHostKeyChecking=no -i ${ID} ${TARGET}
+User=${USER}
+
+# Restart every >2 seconds to avoid StartLimitInterval failure
+RestartSec=5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

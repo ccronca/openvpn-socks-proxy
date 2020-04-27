@@ -1,0 +1,21 @@
+client
+dev tun
+proto tcp
+remote {{ server_name }} 1194
+ca ca.crt
+cert {{client_name}}.crt
+key {{client_name}}.key
+;route openvpn-server-ip 255.255.255.255 net_gateway
+socks-proxy-retry
+socks-proxy 127.0.0.1 {{port}}
+resolv-retry infinite
+nobind
+user nobody
+group nogroup
+persist-key
+persist-tun
+remote-cert-tls server
+tls-auth ta.key 1
+cipher AES-128-CBC
+auth SHA256
+verb 3

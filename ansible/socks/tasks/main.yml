@@ -1,0 +1,32 @@
+---
+- name: "Create socks user accounts"
+  user:
+    name: "{{user_name}}"
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+- name: Copy systemd ssh-sock-proxy service
+  copy:
+    src: files/ssh-socks-proxy@.service
+    dest: /etc/systemd/system/
+    mode: "644"
+  when: type == "client"
+- name: Create ssh-sock-proxy vps config
+  template:
+    src: "ssh-socks-proxy@vps"
+    dest: /etc/default/
+    mode: "644"
+  when: type == "client"
+  notify: [socks restart]
+- name: Enable ssh-socks-proxy@vps.service
+  systemd:
+    name: ssh-socks-proxy@vps.service
+    state: started
+    enabled: yes
+  when: type == "client"
+- name: Set authorized key taken from file
+  authorized_key:
+    user: "{{user_name}}"
+    state: present
+    key: "{{key}}"
+  when: type == "server"

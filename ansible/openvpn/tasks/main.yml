@@ -1,0 +1,39 @@
+---
+- name: Ensure openvpn is at the latest version
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - openvpn
+- name: Enable IPv4 traffic forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: yes
+    state: present
+    reload: yes
+- name: Create a ccd if it does not exist
+  file:
+    path: /etc/openvpn/ccd
+    state: directory
+    mode: "0755"
+  when: type == "server"
+- name: Create a ccd clients files
+  template:
+    src: "ccd_client.j2"
+    dest: /etc/openvpn/ccd/{{item.key}}
+  notify: ["openvpn restart"]
+  when: type == "server"
+  loop: "{{ q('dict', client_networks) }}"
+
+- name: "Generate {{type}}.conf"
+  template:
+    src: "{{type}}.j2"
+    dest: /etc/openvpn/{{type}}.conf
+  notify: ["openvpn restart"]
+  loop: "{{ q('dict', client_networks) }}"
+- name: Ensure OpenVPN is started
+  service:
+    name: "openvpn@{{ type }}"
+    state: started
+    enabled: true

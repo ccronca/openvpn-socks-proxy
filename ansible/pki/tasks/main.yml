@@ -1,0 +1,89 @@
+---
+- name: Ensure easy-rsa is at the latest version
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - easy-rsa
+- name: "Remove CA directory"
+  file:
+    state: absent
+    path: "{{ ansible_env.HOME }}/openvpn-ca/"
+- name: "Create CA dir"
+  command: make-cadir {{ ansible_env.HOME }}/openvpn-ca
+- name: Customize CA variable configuration
+  lineinfile:
+    dest: "{{ ansible_env.HOME }}/openvpn-ca/vars"
+    regexp: "^{{ item.property | regex_escape() }}="
+    line: "{{ item.property }}={{ item.value }}"
+  with_items:
+    - { property: "export KEY_NAME", value: '"{{common_name}}"' }
+    - { property: "export KEY_COUNTRY", value: '"{{country}}"' }
+    - { property: "export KEY_PROVINCE", value: '"{{province}}"' }
+    - { property: "export KEY_CITY", value: '"{{city}}"' }
+    - { property: "export KEY_ORG", value: '"{{org}}"' }
+    - { property: "export KEY_EMAIL", value: '"{{email}}"' }
+    - { property: "export KEY_OU", value: '"{{ou}}"' }
+    - {
+        property: "export KEY_CONFIG",
+        value: "{{ ansible_env.HOME }}/openvpn-ca/openssl-1.0.0.cnf",
+      }
+    - {
+        property: "export KEY_DIR",
+        value: "{{ ansible_env.HOME }}/openvpn-ca/keys",
+      }
+- name: "Build the certificate authority"
+  shell: >
+    source vars;
+    ./clean-all;
+    yes "" | ./build-ca;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+- name: "Build server certificate"
+  shell: >
+    source vars;
+    ./build-key-server --batch server;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+- name: "Build Diffie-Hellman parameters and key generation"
+  shell: >
+    source vars;
+    yes "" | ./build-dh;
+    openvpn --genkey --secret keys/ta.key;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+- name: "Build clients certificate"
+  shell: source vars; ./build-key --batch {{item}}
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+  with_items: "{{clients}}"
+- name: "Copy key and server certificates to /etc/openvpn"
+  copy:
+    remote_src: yes
+    src: "{{ ansible_env.HOME }}/openvpn-ca/keys/{{ item }}"
+    dest: "/etc/openvpn/"
+    owner: root
+    group: root
+    mode: "600"
+  with_items:
+    - "ca.crt"
+    - "server.crt"
+    - "server.key"
+    - "ta.key"
+    - "dh2048.pem"
+- name: "Copy client certificates to /etc/openvpn"
+  copy:
+    remote_src: yes
+    src: "{{ ansible_env.HOME }}/openvpn-ca/keys/{{ item }}.crt"
+    dest: "/etc/openvpn/"
+  with_items: "{{ clients }}"
+- name: "Copy client keys to /etc/openvpn"
+  copy:
+    remote_src: yes
+    src: "{{ ansible_env.HOME }}/openvpn-ca/keys/{{ item }}.key"
+    dest: "/etc/openvpn/"
+  with_items: "{{ clients }}"

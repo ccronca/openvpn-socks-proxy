@@ -1,0 +1,9 @@
+---
+common_name: server
+country: US
+province: CA
+city: SF
+org: MU
+email: me@myhost.mydomain
+ou: MU
+clients: []

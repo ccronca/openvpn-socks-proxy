@@ -1,0 +1,28 @@
+port 1194
+proto tcp
+dev tun
+ca ca.crt
+cert server.crt
+key server.key
+dh dh2048.pem
+server {{ server_cidr }}
+ifconfig-pool-persist ipp.txt
+client-config-dir ccd
+;push "redirect-gateway def1 bypass-dhcp"
+push "route {{ server_network }}"
+client-to-client
+keepalive 10 120
+tls-auth ta.key 0
+key-direction 0
+cipher AES-128-CBC
+auth SHA256
+user nobody
+group nogroup
+persist-key
+persist-tun
+status openvpn-status.log
+verb 3
+
+{% for network in client_networks %}
+route {{ client_networks[network].network }}
+{% endfor %}

@@ -1,0 +1,3 @@
+---
+- name: socks restart
+  service: name=openvpn state=restarted daemon_reload=yes

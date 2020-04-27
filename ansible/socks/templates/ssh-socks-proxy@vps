@@ -1,0 +1,4 @@
+TARGET={{vps}}
+USER={{user_name}}
+ID=/home/{{user_name}}/.ssh/id_rsa
+LOCAL_PORT={{port}}
