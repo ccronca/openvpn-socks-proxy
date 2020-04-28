@@ -1,20 +1,21 @@
 client
-dev tun
-proto tcp
-remote {{ server_name }} 1194
+dev tun                                               # Use a TUN (OSI layer 3) virtual network device for the VPN
+proto tcp                                             # Use a TCP connection to the OpenVPN server (through the proxy)
+remote {{ server_name }} 1194                         # Address of a server hosting an OpenVPN server
 ca ca.crt
 cert {{client_name}}.crt
 key {{client_name}}.key
 ;route openvpn-server-ip 255.255.255.255 net_gateway
+;redirect-gateway def1                                # Redirect other traffic through the VPN
 socks-proxy-retry
-socks-proxy 127.0.0.1 {{port}}
+socks-proxy 127.0.0.1 {{port}}                        # Use a local SOCKS proxy on TCP port {{port}}
 resolv-retry infinite
 nobind
 user nobody
 group nogroup
 persist-key
-persist-tun
-remote-cert-tls server
+persist-tun                                           # Avoid TUN/TAP re-initialization upon reconnects
+remote-cert-tls server                                # Identifies the server's certificate
 tls-auth ta.key 1
 cipher AES-128-CBC
 auth SHA256
