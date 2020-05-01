@@ -2,6 +2,28 @@
 
 Obfuscation of the client-side IP using a SOCKS5 tunnel in a site-to-site OpenVPN setup
 
+- [openvpn-socks-proxy](#openvpn-socks-proxy)
+  - [Overview](#overview)
+  - [Getting Started](#getting-started)
+    - [Requirements](#requirements)
+      - [Toolkit](#toolkit)
+      - [Terraform](#terraform)
+      - [Ansible](#ansible)
+      - [Google Cloud SDK](#google-cloud-sdk)
+      - [Google project](#google-project)
+      - [Service Account](#service-account)
+    - [Installing](#installing)
+    - [Infrastructure](#infrastructure)
+    - [Provision](#provision)
+  - [Implementation details](#implementation-details)
+  - [Expand Scope of the VPN](#expand-scope-of-the-vpn)
+    - [Server Side](#server-side)
+    - [Client side](#client-side)
+    - [Multiple LANs behind OpenVPN clients](#multiple-lans-behind-openvpn-clients)
+    - [Bridging and routing](#bridging-and-routing)
+  - [TODO](#todo)
+  - [Helpful links](#helpful-links)
+
 ## Overview
 
 The goal of this POC is to create a site-to-site OpenVPN setup between two networks connected to each other using an OpenVPN tunnel, obfuscating the OpenVPN client-side IP using a SOCKS5 tunnel. As an added benefit, client-side obfuscation proxy also makes it difficult to detect an OpenVPN connection by deep packet inspection.
@@ -56,10 +78,62 @@ Site A        LAN                    Site B      LAN
 
 - Terraform
 - Ansible
+- Gcloud
+- jq
+
+#### Terraform
+
+This will install Terraform on Fedora, please check instructions for your distribution
+
+```bash
+# Ensure wget is installed
+sudo dnf -y install wget unzip
+# Download the terraform archive
+# Check the latest release on Terraform releases page before downloading below.
+export VER="0.12.24"
+wget https://releases.hashicorp.com/terraform/${VER}/terraform_${VER}_linux_amd6
+# Extract it
+unzip terraform_${VER}_linux_amd64.zip
+# Move terraform executable to a directory within your $PATH
+mv terraform $HOME/bin/
+```
+
+#### Ansible
+
+```bash
+export VENV=openvpn-socks-proxy
+# Creating a virtual environment
+python3 -m venv $VENV
+# Activate virtual env
+source env/$VENV/activate
+# Install requirements
+pip3 install -r ansible/requirements.tx
+```
+
+#### Google Cloud SDK
+
+Install the Google Cloud SDK, initialize it
+
+```bash
+# Cloud SDK requires Python
+# Download the latest sdk file best suited to your operating system (Linux 64-bit in this case).
+curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-290.0.1-linux-x86_64.tar.gz
+# Extract gcloud sdk
+tar zxvf [ARCHIVE_FILE] google-cloud-sdk
+# Install it
+./google-cloud-sdk/install.sh
+# Run gcloud init to get started
+gcloud init
+
+```
 
 #### Google project
 
 Create a project to host the required infrastructure
+
+```bash
+gcloud projects create <project_id>
+```
 
 #### Service Account
 
@@ -70,17 +144,25 @@ To work with the GCE modules, you’ll first need to get some credentials in the
 
 In order to configure Ansible and Terraform with your GCP credentials, set the following environment variables:
 
-- `GCE_EMAIL`
-- `GCE_PROJECT`
-- `GCE_CREDENTIALS_FILE_PATH`: Service Account json file
-- `GOOGLE_CLOUD_KEYFILE_JSON`: Service Account json file
+```bash
+# For terraform
+export GOOGLE_CLOUD_KEYFILE_JSON=<service account json file>
+
+# For ansible
+export GCE_CREDENTIALS_FILE_PATH=$GOOGLE_CLOUD_KEYFILE_JSON
+export GCE_EMAIL=$(jq -r .client_email $GCE_CREDENTIALS_FILE_PATH)
+
+# For both
+export GCE_PROJECT=$(jq -r .project_id $GCE_CREDENTIALS_FILE_PATH)
+
+```
 
 ### Installing
 
 ### Infrastructure
 
 ```shell
-terraform apply -var project_id=<project_id>
+terraform apply -var project_id=$GCE_PROJECT
 ```
 
 ### Provision
@@ -103,6 +185,8 @@ To expand the scope of the VPN so that clients can reach multiple machines on th
 push "route <network> <netmask>"
 ```
 
+The `push` routes are added on the clients connecting, telling them to route those networks over the vpn.
+
 Make sure that IP and TUN forwarding are enabled on the OpenVPN server machine.
 
 ### Client side
@@ -121,11 +205,25 @@ Create a file called `client Common Name` with the route, this will tell OpenVPN
 iroute <client_network> <client_netmask>
 ```
 
-We also have to tell the kernel to route `<client_network>` thought the `tun` interface, add the following line to `server.conf`:
+We also have to tell the kernel to route `<client_network>` thought the `tun` interface, add the following line to `server.conf` in the server side:
 
 ```bash
 route <client_network> <client_netmask>
 ```
+
+The `route` entry adjust the local routing table, telling it to route this network over the vpn.
+
+Make sure that IP and TUN forwarding are enabled on the OpenVPN server machine.
+
+### Multiple LANs behind OpenVPN clients
+
+The configuration for multiple OpenVPN clients is similar to a single client, the server will `push` every client route to all the clients, but skipping the route that is local to each client. The `iroute` entry will tell the server which client is responsible for which route and will skip pushing those routes to the clients. Without the `iroute` entry we will find the following error in the logs file:
+
+```txt
+MULTI: bad source address from client [IP ADDRESS], packet dropped
+```
+
+### [Bridging and routing](BridgingAndRouting.md)
 
 ## TODO
 
@@ -139,3 +237,4 @@ route <client_network> <client_netmask>
 - [Site-To-Site VPN Routing Explained In Detail](https://openvpn.net/vpn-server-resources/site-to-site-routing-explained-in-detail/)
 - [Create a SOCKS proxy on a Linux server with SSH to bypass content filters](https://ma.ttias.be/socks-proxy-linux-ssh-bypass-content-filters/)
 - [Routing traffic through OpenVPN using a local SOCKS proxy](https://kiljan.org/2017/11/15/routing-traffic-through-openvpn-using-a-local-socks-proxy/)
+- [OpenVPN Routing](https://www.secure-computing.net/wiki/index.php/OpenVPN/Routing)
