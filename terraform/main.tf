@@ -1,22 +1,19 @@
 
 variable project_id {}
-variable gce_ssh_pub_key_file {}
+
+variable "sites_networks" {
+
+  default = {
+    site-a = "10.0.0.0/16"
+    site-b = "10.1.0.0/16"
+  }
+}
 
 locals {
-  region                  = "us-central1"
-  zone                    = "${local.region}-a"
-  image                   = "debian-cloud/debian-9"
-  machine_type            = "f1-micro"
-  metadata_startup_script = "sudo apt-get update; sudo apt-get install -yq tcpdump vim traceroute openvpn"
-  sites                   = ["site-a", "site-b"]
-}
-
-data "google_client_openid_userinfo" "me" {
-}
-
-resource "google_os_login_ssh_public_key" "cache" {
-  user = data.google_client_openid_userinfo.me.email
-  key  = file(var.gce_ssh_pub_key_file)
+  region       = "us-central1"
+  zone         = "${local.region}-a"
+  image        = "debian-cloud/debian-9"
+  machine_type = "f1-micro"
 }
 
 data "google_project" "openvpn_socks_proxy_prj" {
@@ -39,16 +36,16 @@ module "project_services" {
 }
 
 resource "google_compute_network" "sites_vpcs" {
-  count                   = length(local.sites)
-  name                    = local.sites[count.index]
+  count                   = length(var.sites_networks)
+  name                    = keys(var.sites_networks)[count.index]
   project                 = data.google_project.openvpn_socks_proxy_prj.project_id
   auto_create_subnetworks = false
 }
 
 resource "google_compute_subnetwork" "sites_subnets" {
-  count         = length(local.sites)
-  name          = local.sites[count.index]
-  ip_cidr_range = "10.${count.index}.0.0/16"
+  count         = length(var.sites_networks)
+  name          = keys(var.sites_networks)[count.index]
+  ip_cidr_range = values(var.sites_networks)[count.index]
   region        = local.region
   network       = google_compute_network.sites_vpcs[count.index].self_link
   project       = data.google_project.openvpn_socks_proxy_prj.project_id
@@ -69,8 +66,6 @@ resource "google_compute_instance" "socks_proxy" {
 
   tags = ["ssh", "socks"]
 
-  metadata_startup_script = local.metadata_startup_script
-
   metadata = {
     enable-oslogin = "TRUE"
   }
@@ -85,8 +80,8 @@ resource "google_compute_instance" "socks_proxy" {
 }
 
 resource "google_compute_instance" "sites" {
-  count        = length(local.sites)
-  name         = "openvpn-${local.sites[count.index]}"
+  count        = length(var.sites_networks)
+  name         = "openvpn-${keys(var.sites_networks)[count.index]}"
   project      = data.google_project.openvpn_socks_proxy_prj.project_id
   machine_type = local.machine_type
   zone         = local.zone
@@ -97,10 +92,9 @@ resource "google_compute_instance" "sites" {
     }
   }
 
-  metadata_startup_script = "${local.metadata_startup_script}; echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward"
-  can_ip_forward          = true
+  can_ip_forward = true
 
-  tags = ["ssh", "openvpn", local.sites[count.index]]
+  tags = ["ssh", "openvpn", keys(var.sites_networks)[count.index]]
 
   metadata = {
     enable-oslogin = "TRUE"
@@ -120,8 +114,8 @@ resource "google_compute_instance" "sites" {
 }
 
 resource "google_compute_firewall" "allow-sites" {
-  count   = length(local.sites)
-  name    = "allow-sites-${local.sites[count.index]}"
+  count   = length(var.sites_networks)
+  name    = "allow-sites-${keys(var.sites_networks)[count.index]}"
   project = data.google_project.openvpn_socks_proxy_prj.project_id
   network = google_compute_network.sites_vpcs[count.index].self_link
 
@@ -137,10 +131,20 @@ resource "google_compute_firewall" "allow-sites" {
 }
 
 resource "google_compute_route" "site-to-site" {
-  count       = length(local.sites)
-  name        = "site-to-site-${local.sites[count.index]}"
+  count       = length(var.sites_networks)
+  name        = "site-to-site-${keys(var.sites_networks)[count.index]}"
   project     = data.google_project.openvpn_socks_proxy_prj.project_id
-  dest_range  = "10.${count.index + 1 % 2}.0.0/16"
+  dest_range  = values(var.sites_networks)[(count.index + 1) % 2]
+  network     = google_compute_network.sites_vpcs[count.index].self_link
+  next_hop_ip = google_compute_instance.sites[count.index].network_interface[0].network_ip
+  priority    = 100
+}
+
+resource "google_compute_route" "site-to-tunneled-lan" {
+  count       = length(var.sites_networks)
+  name        = "${keys(var.sites_networks)[count.index]}-vpn-lan"
+  project     = data.google_project.openvpn_socks_proxy_prj.project_id
+  dest_range  = "10.8.0.0/16"
   network     = google_compute_network.sites_vpcs[count.index].self_link
   next_hop_ip = google_compute_instance.sites[count.index].network_interface[0].network_ip
   priority    = 100
