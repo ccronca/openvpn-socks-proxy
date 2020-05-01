@@ -14,7 +14,6 @@
         client_networks:
           client1:
             network: 10.0.0.0 255.255.255.0
-      tags: aqui
   tasks:
     - name: Fetch the client cert from the servers
       run_once: yes
@@ -39,22 +38,6 @@
         - client1.crt
         - ca.crt
         - ta.key
-  roles:
-    - role: openvpn
-      vars:
-        type: client
-        client_name: client1
-        server_name: "{{ hostvars['openvpn-site-b-16d3']['gce_public_ip'] }}"
-        port: 8000
-      tags: aqui
-    - role: socks
-      vars:
-        vps: "{{ hostvars['socks-proxy-16d3']['gce_public_ip'] }}"
-        user_name: socks
-        type: client
-- hosts: tag_site-a
-  become: yes
-  tasks:
     - name: Fetch the socks ssh public key
       run_once: yes
       fetch: src=/home/socks/.ssh/id_rsa.pub dest=buffer/ flat=yes
@@ -62,10 +45,22 @@
   become: yes
   roles:
     - role: socks
+      name: Setup the server side of the socks proxy
       vars:
-        vps: "{{ hostvars['socks-proxy-16d3']['gce_public_ip'] }}"
-        user_name: socks
         type: server
         key: "{{ lookup('file', 'buffer/id_rsa.pub') }}"
+- hosts: tag_site-a
+  become: yes
+  roles:
+    - role: socks
+      vars:
+        vps: "{{ hostvars['socks-proxy']['gce_public_ip'] }}"
+        user_name: socks
+        type: client
         port: 8000
-      tags: aqui
+    - role: openvpn
+      vars:
+        type: client
+        client_name: client1
+        server_name: "{{ hostvars['openvpn-site-b']['gce_public_ip'] }}"
+        socks_port: 8000

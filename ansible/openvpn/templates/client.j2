@@ -5,17 +5,17 @@ remote {{ server_name }} 1194                         # Address of a server host
 ca ca.crt
 cert {{client_name}}.crt
 key {{client_name}}.key
-;route openvpn-server-ip 255.255.255.255 net_gateway
 ;redirect-gateway def1                                # Redirect other traffic through the VPN
 socks-proxy-retry
-socks-proxy 127.0.0.1 {{port}}                        # Use a local SOCKS proxy on TCP port {{port}}
-resolv-retry infinite
-nobind
+socks-proxy 127.0.0.1 {{socks_port}}                        # Use a local SOCKS proxy on TCP port {{port}}
+resolv-retry infinite                                 # If hostname resolve fails for remote, retry resolve indefinitely
+nobind                                                # Do not bind to local address and port. The IP stack will allocate a dynamic port for returning packets.
 user nobody
 group nogroup
 persist-key
 persist-tun                                           # Avoid TUN/TAP re-initialization upon reconnects
 remote-cert-tls server                                # Identifies the server's certificate
+mlock                                                 # Disable paging by calling the mlockall function. Ensures that key material and tunnel data are never written to disk due to virtual memory paging operations
 tls-auth ta.key 1
 cipher AES-128-CBC
 auth SHA256

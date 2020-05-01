@@ -1,4 +1,6 @@
 ---
 server_cidr: 10.8.0.0 255.255.255.0
 type: client
-port: 8000
+socks_port: 8000
+client_networks:
+  noclient:

@@ -47,11 +47,10 @@
   args:
     chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
     executable: /bin/bash
-- name: "Build Diffie-Hellman parameters and key generation"
+- name: "Build Diffie-Hellman parameters"
   shell: >
     source vars;
     yes "" | ./build-dh;
-    openvpn --genkey --secret keys/ta.key;
   args:
     chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
     executable: /bin/bash
@@ -61,6 +60,11 @@
     chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
     executable: /bin/bash
   with_items: "{{clients}}"
+- name: Create a openvpn dir if it does not exist
+  file:
+    path: /etc/openvpn
+    state: directory
+    mode: "0755"
 - name: "Copy key and server certificates to /etc/openvpn"
   copy:
     remote_src: yes
@@ -73,7 +77,6 @@
     - "ca.crt"
     - "server.crt"
     - "server.key"
-    - "ta.key"
     - "dh2048.pem"
 - name: "Copy client certificates to /etc/openvpn"
   copy:

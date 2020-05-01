@@ -25,7 +25,13 @@
   notify: ["openvpn restart"]
   when: type == "server"
   loop: "{{ q('dict', client_networks) }}"
-
+- name: "Key generation"
+  shell: openvpn --genkey --secret ta.key;
+  args:
+    chdir: "/etc/openvpn/"
+    executable: /bin/bash
+  when: type == "server"
+  notify: ["openvpn restart"]
 - name: "Generate {{type}}.conf"
   template:
     src: "{{type}}.j2"
