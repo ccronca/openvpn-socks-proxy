@@ -16,6 +16,7 @@ Obfuscation of the client-side IP using a SOCKS5 tunnel in a site-to-site OpenVP
     - [Infrastructure](#infrastructure)
     - [Provision](#provision)
   - [Implementation details](#implementation-details)
+  - [Terraform tags](#terraform-tags)
   - [Expand Scope of the VPN](#expand-scope-of-the-vpn)
     - [Server Side](#server-side)
     - [Client side](#client-side)
@@ -102,12 +103,13 @@ mv terraform $HOME/bin/
 
 ```bash
 export VENV=openvpn-socks-proxy
+export TMPDIR=`mktemp -d`
 # Creating a virtual environment
-python3 -m venv $VENV
+python3 -m venv $TMPDIR/$VENV
 # Activate virtual env
-source env/$VENV/activate
+source $TMPDIR/$VENV/activate
 # Install requirements
-pip3 install -r ansible/requirements.tx
+pip3 install -r ansible/requirements.txt
 ```
 
 #### Google Cloud SDK
@@ -172,6 +174,15 @@ ansible-playbook -i inventory tasks.yaml
 ```
 
 ## Implementation details
+
+## Terraform tags
+
+The following network tags are assigned to the GCE instances depending on their role, causing the dynamic inventory (`gce.py`) to group the instances by these tag, so we can select hosts group on the playbook.
+
+- `socks`: instance acting as socks server
+- `openvpn`: peers of the OpenVPN tunnel
+- `site-a`: client side of the OpenVPN tunnel
+- `site-b`: server side of the OpenVPN tunnel
 
 ## Expand Scope of the VPN
 
