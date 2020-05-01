@@ -1,5 +1,7 @@
 # Introduction
 
+This documentation is a copy from [BridgingAndRouting - OpenVPN](https://community.openvpn.net/openvpn/wiki/BridgingAndRouting)
+
 For a brief introduction on bridging and routing, look at these links:
 
 * [Determining whether to use a routed or bridged VPN in OpenVPN HOWTO](http://openvpn.net/index.php/open-source/documentation/howto.html#vpntype)
